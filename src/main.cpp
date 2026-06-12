@@ -18,7 +18,8 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include "objload.h"
+#include "Pathfinder.h"
+#include "Snow.h"
 
 // Zmienne globalne
 GLuint program;
@@ -27,7 +28,12 @@ GLuint vaoMatterhorn;
 int numIndicesMatterhorn = 0;
 GLuint textureMatterhorn;
 
+SnowSimulation* snowSim = nullptr;
+Pathfinder* pathfinder = nullptr;
+GLuint pathProgram;
+
 float globalSnowLevel = 0.0f;
+int selectedCorner = 0;
 
 // Kamera
 glm::vec3 cameraPos = glm::vec3(0.0f, 1.2f, 2.5f);
@@ -140,8 +146,24 @@ void init(GLFWwindow *window) {
     std::cout << "Loaded Matterhorn model successfully with "
               << numIndicesMatterhorn << " indices." << std::endl;
 
-    // We no longer initialize the particle system here
-    // The snow effect is handled entirely by the mountain shader
+    // Initialize Grid Data for Pathfinding
+    snowSim = new SnowSimulation(0); // We only need the grid, not particles
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
+    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.1f, 0.1f, 0.1f));
+    modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f, -1.7f, 0.0f));
+    snowSim->initGridFromModel(model, modelMatrix);
+    
+    // Initialize Pathfinder
+    pathfinder = new Pathfinder(snowSim);
+    std::string pathVertPath = get_path("shaders/path.vert");
+    std::string pathFragPath = get_path("shaders/path.frag");
+    std::vector<char> pathVertBuf(pathVertPath.begin(), pathVertPath.end());
+    pathVertBuf.push_back('\0');
+    std::vector<char> pathFragBuf(pathFragPath.begin(), pathFragPath.end());
+    pathFragBuf.push_back('\0');
+    pathProgram = shaderLoader.CreateProgram(pathVertBuf.data(), pathFragBuf.data());
+    
+    pathfinder->initRendering(pathProgram);
   }
 
   // Wczytywanie tekstury
@@ -198,6 +220,20 @@ void renderScene(GLFWwindow *window) {
 
   ImGui::Begin("Snow Control");
   ImGui::SliderFloat("Snow Amount", &globalSnowLevel, 0.0f, 10.0f);
+  
+  ImGui::Separator();
+  ImGui::Text("Pathfinding Options");
+  const char* corners[] = { "North-West", "North-East", "South-West", "South-East" };
+  ImGui::Combo("Start Corner", &selectedCorner, corners, 4);
+  
+  if (ImGui::Button("Generate Route") && pathfinder) {
+      pathfinder->generatePath(selectedCorner, globalSnowLevel);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Clear Routes") && pathfinder) {
+      pathfinder->clearPaths();
+  }
+  
   ImGui::End();
 
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -225,6 +261,10 @@ void renderScene(GLFWwindow *window) {
     glUniformMatrix4fv(transLoc, 1, GL_FALSE, &transformation[0][0]);
 
     Core::drawVAOIndexedUShort(vaoMatterhorn, numIndicesMatterhorn);
+    
+    if (pathfinder) {
+        pathfinder->render(view, projection);
+    }
   }
 
   ImGui::Render();
@@ -246,6 +286,15 @@ void shutdown(GLFWwindow *window) {
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
+
+  if (pathfinder) {
+      delete pathfinder;
+      pathfinder = nullptr;
+  }
+  if (snowSim) {
+      delete snowSim;
+      snowSim = nullptr;
+  }
 
   // Czyszczenie zasobów
   if (vaoMatterhorn != 0) {

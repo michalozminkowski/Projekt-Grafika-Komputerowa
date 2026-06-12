@@ -39,6 +39,7 @@ private:
   std::vector<Snowflake> particles;
   std::vector<glm::vec3> renderData;
 
+public:
   // Grid details
   int gridWidth = 200;
   int gridHeight = 200;
