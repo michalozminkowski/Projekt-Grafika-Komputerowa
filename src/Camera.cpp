@@ -15,14 +15,14 @@ glm::mat4 Core::createPerspectiveMatrix(float zNear, float zFar, float frustumSc
 
 glm::mat4 Core::createViewMatrix( glm::vec3 position, glm::vec3 forward, glm::vec3 up )
 {
-	glm::vec3 side = glm::cross(forward, up);
+	glm::vec3 f = glm::normalize(forward);
+	glm::vec3 s = glm::normalize(glm::cross(f, up));
+	glm::vec3 u = glm::cross(s, f);
 
-	// Trzeba pamietac o minusie przy ustawianiu osi Z kamery.
-	// Wynika to z tego, ze standardowa macierz perspektywiczna zaklada, ze "z przodu" jest ujemna (a nie dodatnia) czesc osi Z.
 	glm::mat4 cameraRotation(1.0f);
-	cameraRotation[0][0] = side.x; cameraRotation[1][0] = side.y; cameraRotation[2][0] = side.z;
-	cameraRotation[0][1] = up.x; cameraRotation[1][1] = up.y; cameraRotation[2][1] = up.z;
-	cameraRotation[0][2] = -forward.x; cameraRotation[1][2] = -forward.y; cameraRotation[2][2] = -forward.z;
+	cameraRotation[0][0] = s.x; cameraRotation[1][0] = s.y; cameraRotation[2][0] = s.z;
+	cameraRotation[0][1] = u.x; cameraRotation[1][1] = u.y; cameraRotation[2][1] = u.z;
+	cameraRotation[0][2] = -f.x; cameraRotation[1][2] = -f.y; cameraRotation[2][2] = -f.z;
 
 	glm::mat4 cameraTranslation(1.0f);
 	cameraTranslation[3] = glm::vec4(-position, 1.0f);
